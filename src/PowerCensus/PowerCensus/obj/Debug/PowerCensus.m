@@ -1,11 +1,57 @@
 ﻿section Census;
 
 [DataSource.Kind="Census", Publish="Census.Publish"]
-shared Census.ListApis = Value.ReplaceType(CensusCall, type function () as any);
+shared Census.GetMetadata = Value.ReplaceType(GetVariables, type function (name as Uri.Type) as any);
+
+RequestHeaders = 
+    [
+        #"Accept" = "application/json"
+    ];
+
+CallCensus = (url as text) =>
+let
+    response = Json.Document(
+        Web.Contents(
+            url,
+            [
+                Headers = RequestHeaders
+            ]
+        )
+    )
+in
+    response;
+
+GetVariables = (name as text) =>
+let
+    
+    result = name
+//    name = "acs/acs5"
+//     vintage = 2010,
+//     metadataType = "variables",
+//     year = if vintage is null then null else Text.From(vintage),
+//     endpoint = if Text.EndsWith(name, "/") or Text.EndsWith(name, "?") then Text.Range(name, 0, Text.Length(name) - 1) else name,
+//     baseUri = "https://api.census.gov",
+//     relativeUri = Text.Replace(Text.Combine({"data/", year, "/", endpoint, "/", metadataType, ".json"}), "//", "/"),
+//     url = Uri.Combine(baseUri,relativeUri),
+//     response = CallCensus(url),
+//     field = if not List.Contains(Record.FieldNames(response), metadataType) then null else Record.Field(response, metadataType),
+//     ConvertedToTable = Record.ToTable(field),
+//     isTimePredicate = List.Contains(ConvertedToTable[Name], "time"),
+//     columnNames = 
+//         if isTimePredicate then
+//             {"label", "concept", "required", "predicateType", "group", "limit", "predicateOnly", "datetime"}
+//         else
+//             {"label", "concept", "required", "predicateType", "group", "limit"},
+//     ExpandedVariables = Table.ExpandRecordColumn(ConvertedToTable, "Value", columnNames, columnNames),
+//     DefinedDataTypes = Table.TransformColumnTypes(ExpandedVariables,{{"label", type text}, {"concept", type text}, {"required", type text}, {"predicateType", type text}, {"group", type text}, {"limit", Int64.Type}}),
+//     resultTable = if isTimePredicate then Table.ExpandRecordColumn(DefinedDataTypes, "datetime", {"year", "quarter"}, {"year", "quarter"}) else DefinedDataTypes
+in
+    result;
+
 
 CensusCall = () =>
 let
-    Source = Json.Document(Web.Contents("https://api.census.gov/data.json")),
+    Source = CallCensus(BaseUri),
     dataset = Source[dataset],
     ConvertedToTable = Table.FromList(dataset, Splitter.SplitByNothing(), {"dataset"}, null, ExtraValues.Error),
     ExpandedDataset = Table.ExpandRecordColumn(ConvertedToTable, "dataset", {"c_vintage", "c_dataset", "c_geographyLink", "c_variablesLink", "c_tagsLink", "c_examplesLink", "c_groupsLink", "c_valuesLink", "c_documentationLink", "c_isAggregate", "c_isAvailable", "@type", "title", "accessLevel", "bureauCode", "description", "distribution", "contactPoint", "identifier", "keyword", "license", "modified", "programCode", "references", "spatial", "temporal", "publisher", "c_isCube", "c_isTimeseries"}, {"c_vintage", "c_dataset", "c_geographyLink", "c_variablesLink", "c_tagsLink", "c_examplesLink", "c_groupsLink", "c_valuesLink", "c_documentationLink", "c_isAggregate", "c_isAvailable", "@type", "title", "accessLevel", "bureauCode", "description", "distribution", "contactPoint", "identifier", "keyword", "license", "modified", "programCode", "references", "spatial", "temporal", "publisher", "c_isCube", "c_isTimeseries"}),
