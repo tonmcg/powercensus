@@ -1,6 +1,9 @@
 let
 	Census.GetGeographicAreas = (year as text, geography as text) as table =>
 		let
+            UnzipContents = Expression.Evaluate(Text.FromBinary(Web.Contents("https://raw.githubusercontent.com/tonmcg/powerCensus/master/M/UnzipContents.pq")), #shared),
+            Geographies = Expression.Evaluate(Text.FromBinary(Web.Contents("https://raw.githubusercontent.com/tonmcg/powerCensus/master/M/Census.Geographies.pq")), #shared),
+            GetStates = Expression.Evaluate(Text.FromBinary(Web.Contents("https://raw.githubusercontent.com/tonmcg/powerCensus/master/M/Census.GetStates.pq")), #shared),
             returnTable = 
                 if geography = "State" then 
                     GetStates(true) 
