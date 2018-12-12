@@ -1,49 +1,52 @@
 let
     geography = "county_within_ua",
-    Census.GetShapefiles = (state_fips as text, geography as text) =>
-        let 
-            shapefiles = Web.Contents("http://www2.census.gov/geo/tiger/GENZ2017/shp/cb_2017_" & state_fips & "_" & geography & "_500k.zip")
-        in
-            shapefiles,
-    statesTable = GetGeographicAreas("2018", "State"),
-    AddedShapefileName = Table.AddColumn(statesTable, "filename", each "cb_2017_" & [state_fips] & "_" & geography & "_500k.zip", type text),
-    FilteredToResultFIPS = Table.SelectRows(AddedShapefileName, each ([state_name] <> "Federated States of Micronesia" and [state_name] <> "Marshall Islands" and [state_name] <> "Palau" and [state_name] <> "U.S. Minor Outlying Islands")),
-    FilteredToDC = Table.SelectRows(FilteredToResultFIPS, each ([state_name] = "District of Columbia")),
+    Census.GetShapefiles = Expression.Evaluate(Text.FromBinary(Web.Contents("https://raw.githubusercontent.com/tonmcg/powerCensus/master/M/Census.GetShapefiles.pq")), #shared),
+    Census.GetGeographicAreas = Expression.Evaluate(Text.FromBinary(Web.Contents("https://raw.githubusercontent.com/tonmcg/powerCensus/master/M/Census.GetGeographicAreas.pq")), #shared),
+    statesTable = Census.GetGeographicAreas("2018", "State"),
+    FilteredToResultFIPS = Table.SelectRows(statesTable, each ([state_name] <> "Federated States of Micronesia" and [state_name] <> "Marshall Islands" and [state_name] <> "Palau" and [state_name] <> "U.S. Minor Outlying Islands")),
+    AddedShapefileName = Table.AddColumn(FilteredToResultFIPS, "filename", each "cb_2017_" & [state_fips] & "_" & geography & "_500k.zip", type text),
+    FilteredToDC = Table.SelectRows(AddedShapefileName, each ([state_name] = "District of Columbia")),
     getShapefiles = Table.AddColumn(FilteredToDC, geography & "_shapefile", each Census.GetShapefiles([state_fips], geography), type binary),
-    AddedShapefileMetadata = Table.AddColumn(getShapefiles, "Metadata", each Value.Metadata([county_within_ua_shapefile]), type record),
+    AddedShapefileMetadata = Table.AddColumn(getShapefiles, "Metadata", (r)=> Value.Metadata(Record.Field(r, geography & "_shapefile")), type record),
     ExpandedShapefileMetadata = Table.ExpandRecordColumn(AddedShapefileMetadata, "Metadata", {"Content.Type", "Content.Uri", "Content.Name", "Headers", "Request.Options", "Response.Status"}, {"Metadata.Content.Type", "Metadata.Content.Uri", "Metadata.Content.Name", "Metadata.Headers", "Metadata.Request.Options", "Metadata.Response.Status"}),
     metadata = ExpandedShapefileMetadata{0},
-    shapefileBinary = metadata[county_within_ua_shapefile],
+    shapefileBinary = Record.Field(metadata, geography & "_shapefile"),
     MetadataRecord = Value.Metadata(shapefileBinary),
-    filename = metadata[filename],
-    contentType = Value.Metadata(shapefileBinary)[Content.Type]?,
-    fileContents = shapefileBinary meta [name="upload", type = contentType],
-    parts = [
-        file = fileContents,
-        locale = "en-US"
-    ],    
+    file_name = metadata[filename],
+    content_type = Value.Metadata(shapefileBinary)[Content.Type]?,
+    value = Text.FromBinary(shapefileBinary, 1252) meta [name = "upload", filename = file_name, #"Content-Type" = content_type],
+    unique = Text.NewGuid(),
+    boundary = "--" & unique,
+    crlf = "#(cr)#(lf)",
+    name = Value.Metadata(value)[name]?,
+    filename = Value.Metadata(value)[filename]?,
+    contentType = Value.Metadata(value)[#"Content-Type"]?,
+    line1 = "Content-Disposition: form-data; name=""" & name & """" &
+        (if filename = null then "" else "; filename=""" & filename & """"),
+    line2 = if contentType = null then {} else { "Content-Type: " & contentType },
+    line3 = { boundary, "Content-Disposition: form-data; name=""callback""", crlf },
+    line4 = { boundary, "Content-Disposition: form-data; name=""sourceSrs""", crlf },
+    line5 = { boundary, "Content-Disposition: form-data; name=""targetSrs""", crlf },
+    line6 = { boundary, "Content-Disposition: form-data; name=""convert""", crlf },
+    lastLine = Text.Combine({boundary, "--"}),
+    lines = { boundary, line1 } & line2 & { "", value } & line3 & line4 & line5 & line6 & { lastLine, "" },
+    body = Text.Combine(lines, crlf),
+    contentLength = Text.Length(body),
     url = "https://ogre.adc4gis.com/convert",
-    Web.MultiPartPost = (url as text, parts as record) as binary =>
-        let
-            unique = Text.NewGuid(),
-            boundary = "--" & unique,
-            crlf = "#(cr)#(lf)",
-            item = (name, value) =>
-                let
-                    filename = Value.Metadata(value)[name]?,
-                    contentType = Value.Metadata(value)[type]?,
-                    line1 = "Content-Disposition: form-data; name=""" & name & """" &
-                        (if filename = null then "" else "; filename=""" & filename & """"),
-                    line2 = if contentType = null then {} else { "Content-Type: " & contentType },
-                    lines = { boundary, line1 } & line2 & { "", value }
-                in
-                    Text.Combine(lines, crlf) & crlf,
-            body = Text.Combine(List.Transform(Record.FieldNames(parts), each item(_, Record.Field(parts, _)))) & boundary & "--" & crlf
-        in
-            Web.Contents(url, [
-                Headers=[#"Content-Type"="multipart/form-data; boundary=" & unique],
-                Content=Text.ToBinary(body)
-            ]),
-    Result = Web.MultiPartPost(url, parts)
+
+    request = Web.Contents(
+        url, 
+        [
+            Headers = 
+            [
+                #"Accept-Language"="en-US,en;q=0.9", 
+                #"Accept-Encoding"="gzip, deflate", 
+                Accept="text/html,application/xhtml+xml,application/xml",
+                #"Content-Type" = "multipart/form-data; boundary=" & unique
+            ], 
+            Content = Text.ToBinary(body, 1252)
+        ]
+    ),
+    jsonResponse = Text.FromBinary(request)
 in
-    Result
+    jsonResponse
