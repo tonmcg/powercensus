@@ -1,6 +1,2 @@
-# powercensus
-Power Query M Custom Connector to Access United States Census Bureau API
-
-To Do:
-- Change authentication from Anonymous to API key
-- Implement NavTable for each of the 310 tables
+# PowerCensus
+PowerCensus enables users to connect to and access data from the United States Census Bureau's APIs, which contain about 330 datasets with over 64,000 variables. These datasets cover topics from international trade to population estimates to business formation within the United States and include endpoints to the popular American Community Survey, Poverty Statistics, and Population Estimates datasets.
