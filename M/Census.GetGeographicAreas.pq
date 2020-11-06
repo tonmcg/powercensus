@@ -86,7 +86,7 @@ let
     ParameterTypes = type function(
         year as (
             type text meta [ 
-                Documentation.AllowedValues = {"2012", "2013", "2014", "2015", "2016", "2017","2018" }
+                Documentation.AllowedValues = {"2012", "2013", "2014", "2015", "2016", "2017","2018", "2019", "2020" }
             ]
         ),
         geography as (
